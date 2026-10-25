@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+export const maxDuration = 30;
+
 const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
 const SYSTEM_PROMPT = `Kamu adalah SABAR, sahabat spiritual digital yang paling ngertiin, sangat manusiawi, penuh empati, hangat, dan tidak menghakimi.
@@ -39,7 +41,7 @@ export async function POST(request: Request) {
     // Key hanya di server, JANGAN pakai NEXT_PUBLIC_
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error("GEMINI_API_KEY belum diset di .env.local!");
+      throw new Error("GEMINI_API_KEY belum diset di environment variables!");
     }
 
     const geminiRes = await fetch(
@@ -58,7 +60,12 @@ export async function POST(request: Request) {
               parts: [{ text: `Seseorang sedang curhat kepadamu: "${text}"` }],
             },
           ],
-          generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
+          generationConfig: {
+            temperature: 0.8,
+            maxOutputTokens: 8192,
+            // Hapus baris di bawah ini kalau muncul error 400 di log
+            thinkingConfig: { thinkingLevel: "low" },
+          },
         }),
       },
     );
@@ -68,6 +75,11 @@ export async function POST(request: Request) {
     if (!geminiRes.ok) {
       console.error("ERROR DARI GEMINI:", geminiRes.status, data?.error);
       throw new Error(data?.error?.message || `HTTP ${geminiRes.status}`);
+    }
+
+    const finishReason = data.candidates?.[0]?.finishReason;
+    if (finishReason && finishReason !== "STOP") {
+      console.warn("Gemini finishReason:", finishReason); // MAX_TOKENS = terpotong
     }
 
     // Gabungkan semua part teks (model baru bisa mengembalikan >1 part)

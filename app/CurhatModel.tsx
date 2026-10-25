@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Children, isValidElement, type ReactNode } from "react";
+import ReactMarkdown, { type Components } from "react-markdown";
 import {
   MessageSquareHeart,
   Send,
@@ -15,6 +16,24 @@ interface CurhatSectionProps {
   isDarkMode: boolean;
 }
 
+// Ambil teks mentah dari children React (untuk deteksi teks Arab)
+const getText = (node: ReactNode): string => {
+  return Children.toArray(node)
+    .map((child) => {
+      if (typeof child === "string" || typeof child === "number") {
+        return String(child);
+      }
+      if (isValidElement(child)) {
+        return getText((child.props as { children?: ReactNode }).children);
+      }
+      return "";
+    })
+    .join("");
+};
+
+const ARABIC_START =
+  /^\s*[\u0600-\u06FF\u0750-\u077F\uFB50-\uFDFF\uFE70-\uFEFF]/;
+
 export const CurhatSection: React.FC<CurhatSectionProps> = ({ isDarkMode }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [inputCurhat, setInputCurhat] = useState("");
@@ -24,7 +43,7 @@ export const CurhatSection: React.FC<CurhatSectionProps> = ({ isDarkMode }) => {
   const handleCurhatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = inputCurhat.trim();
-    if (!text) return;
+    if (!text || loading) return;
 
     setLoading(true);
     setAiResponse(null);
@@ -42,7 +61,8 @@ export const CurhatSection: React.FC<CurhatSectionProps> = ({ isDarkMode }) => {
         setAiResponse(data.reply);
       } else {
         setAiResponse(
-          data.error ||
+          data.reply ||
+            data.error ||
             "Maaf, sepertinya ada kendala saat meresapi curhatanmu. Coba ceritakan lagi ya.",
         );
       }
@@ -65,6 +85,75 @@ export const CurhatSection: React.FC<CurhatSectionProps> = ({ isDarkMode }) => {
   const panelStyle = isDarkMode
     ? "border-white/[0.08] bg-[#191916] text-[#f5f1eb]"
     : "border-stone-200/90 bg-white text-[#24221f]";
+
+  // Styling untuk hasil markdown dari AI
+  const markdownComponents: Components = {
+    p: ({ children }) => {
+      const isArabic = ARABIC_START.test(getText(children));
+      return (
+        <p
+          dir="auto"
+          className={
+            isArabic
+              ? "my-4 text-right text-2xl leading-[2.2]"
+              : "my-3 first:mt-0 last:mb-0"
+          }
+        >
+          {children}
+        </p>
+      );
+    },
+    strong: ({ children }) => (
+      <strong
+        className={`font-semibold ${
+          isDarkMode ? "text-orange-200" : "text-orange-800"
+        }`}
+      >
+        {children}
+      </strong>
+    ),
+    em: ({ children }) => <em className="italic">{children}</em>,
+    ul: ({ children }) => (
+      <ul className="my-3 list-disc space-y-2 pl-5 marker:text-[#e96b2c]">
+        {children}
+      </ul>
+    ),
+    ol: ({ children }) => (
+      <ol className="my-3 list-decimal space-y-2 pl-5 marker:text-[#e96b2c]">
+        {children}
+      </ol>
+    ),
+    li: ({ children }) => (
+      <li dir="auto" className="pl-1">
+        {children}
+      </li>
+    ),
+    h1: ({ children }) => (
+      <h4 className="mb-2 mt-5 text-base font-semibold">{children}</h4>
+    ),
+    h2: ({ children }) => (
+      <h4 className="mb-2 mt-5 text-base font-semibold">{children}</h4>
+    ),
+    h3: ({ children }) => (
+      <h4 className="mb-2 mt-5 text-sm font-semibold">{children}</h4>
+    ),
+    blockquote: ({ children }) => (
+      <blockquote
+        className={`my-4 border-l-4 py-1 pl-4 italic ${
+          isDarkMode
+            ? "border-orange-400/40 text-stone-300"
+            : "border-orange-300 text-stone-600"
+        }`}
+      >
+        {children}
+      </blockquote>
+    ),
+    hr: () => (
+      <hr
+        className={`my-5 ${isDarkMode ? "border-white/10" : "border-stone-200"}`}
+      />
+    ),
+  };
 
   return (
     <div className="my-2">
@@ -178,8 +267,9 @@ export const CurhatSection: React.FC<CurhatSectionProps> = ({ isDarkMode }) => {
                     className={`flex items-start gap-1.5 text-[11px] leading-5 ${muted}`}
                   >
                     <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    Curhatanmu bersifat 100% anonim, privat, dan tidak disimpan
-                    untuk publik.
+                    Curhatanmu tidak ditampilkan ke publik dan tidak disimpan di
+                    website ini. Teks dikirim ke layanan AI (Google Gemini)
+                    untuk diproses.
                   </p>
 
                   <button
@@ -204,13 +294,15 @@ export const CurhatSection: React.FC<CurhatSectionProps> = ({ isDarkMode }) => {
             ) : (
               <div className="space-y-5">
                 <div
-                  className={`whitespace-pre-line rounded-xl border p-4 text-sm leading-7 sm:p-5 ${
+                  className={`rounded-xl border p-4 text-sm leading-7 sm:p-5 ${
                     isDarkMode
                       ? "border-orange-400/15 bg-orange-400/[0.04] text-stone-200"
                       : "border-orange-100 bg-[#fff8f2] text-stone-700"
                   }`}
                 >
-                  {aiResponse}
+                  <ReactMarkdown components={markdownComponents}>
+                    {aiResponse}
+                  </ReactMarkdown>
                 </div>
 
                 <div
