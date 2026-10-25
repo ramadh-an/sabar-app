@@ -1,17 +1,8 @@
 import { NextResponse } from "next/server";
 
-export async function POST(request: Request) {
-  try {
-    const { text } = await request.json();
+const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
 
-    const geminiApiKey =
-      process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
-    const groqApiKey =
-      process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
-
-    let replyText = null;
-    const promptText = `Kamu adalah SABAR, sahabat spiritual digital yang paling ngertiin, sangat manusiawi, penuh empati, hangat, dan tidak menghakimi. 
-Seseorang sedang curhat kepadamu: "${text}".
+const SYSTEM_PROMPT = `Kamu adalah SABAR, sahabat spiritual digital yang paling ngertiin, sangat manusiawi, penuh empati, hangat, dan tidak menghakimi.
 
 PENTING: Jangan gunakan bahasa robot, kaku, atau format template yang membosankan. Bicaralah seperti sahabat karib yang menenangkan, tulus, dan bijaksana secara islami.
 
@@ -19,68 +10,9 @@ Berikan respons yang mengalir natural dengan struktur yang merangkul hati:
 1. **Pelukan & Empati**: Validasi perasaannya secara tulus dan mendalam, sesuaikan dengan apa yang dia ceritakan agar dia merasa didengar dan dipeluk secara emosional.
 2. **Arahan & Mengingat Allah**: Ajak dia melihat sisi hikmahnya atau kenalkan pada Asmaul Husna yang relevan dengan keadaannya saat itu, jelaskan maknanya dengan lembut.
 3. **Penawar dari Al-Qur'an & Sunnah**: Berikan 1 ayat Al-Qur'an atau hadis yang paling pas sebagai penyejuk batin beserta terjemahannya yang menyentuh.
-4. **Langkah Tindakan & Doa**: Berikan saran ikhtiar nyata yang ringan dan menenangkan, lalu tutup dengan doa pendek penenang hati (lengkap dengan teks Arab, latin, dan artinya).`;
+4. **Langkah Tindakan & Doa**: Berikan saran ikhtiar nyata yang ringan dan menenangkan, tutup dengan doa pendek penenang hati (lengkap dengan teks Arab, latin, dan artinya).`;
 
-    // 1. Coba Jalur Gemini (Menggunakan Model Stabil: gemini-1.5-flash)
-    if (geminiApiKey && !replyText) {
-      const geminiModels = ["gemini-1.5-flash", "gemini-1.5-pro"];
-      for (const model of geminiModels) {
-        try {
-          const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiApiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: promptText }] }],
-              }),
-            },
-          );
-          const data = await res.json();
-          if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            replyText = data.candidates[0].content.parts[0].text;
-            break;
-          }
-        } catch (e) {
-          console.error(`Gemini model ${model} error:`, e);
-        }
-      }
-    }
-
-    // 2. Coba Jalur Groq jika Gemini belum dapat / tidak ada key
-    if (groqApiKey && !replyText) {
-      const groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
-      for (const model of groqModels) {
-        try {
-          const res = await fetch(
-            "https://api.groq.com/openai/v1/chat/completions",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${groqApiKey}`,
-              },
-              body: JSON.stringify({
-                model: model,
-                messages: [{ role: "user", content: promptText }],
-                temperature: 0.85,
-              }),
-            },
-          );
-          const data = await res.json();
-          if (data.choices?.[0]?.message?.content) {
-            replyText = data.choices[0].message.content;
-            break;
-          }
-        } catch (e) {
-          console.error(`Groq model ${model} error:`, e);
-        }
-      }
-    }
-
-    // 3. JARING PENGAMAN DARURAT
-    if (!replyText) {
-      replyText = `1. **Pelukan & Empati**: Peluk jauh buat kamu ya... Mendengar cerita "${text}", wajar banget kalau sekarang rasanya penat dan berat banget di dada. Tarik napas dalam-dalam, izinkan dirimu istirahat sebentar. Kamu udah hebat banget karena bertahan sejauh ini.
+const FALLBACK_REPLY = `1. **Pelukan & Empati**: Peluk jauh buat kamu ya... Mendengar cerita yang kamu bagikan, wajar banget kalau sekarang rasanya penat dan berat di dada. Tarik napas dalam-dalam, izinkan dirimu istirahat sebentar. Kamu udah hebat banget karena bertahan sejauh ini.
 
 2. **Arahan & Mengingat Allah**: 
 Ingatlah selalu kepada **Al-Wadud** (Maha Pencinta & Mengasihi) dan **As-Salam** (Maha Pemberi Kesejahteraan). Dia sangat tahu lelah yang sedang kamu simpan dalam diam.
@@ -92,13 +24,66 @@ Ingatlah selalu kepada **Al-Wadud** (Maha Pencinta & Mengasihi) dan **As-Salam**
 4. **Langkah Tindakan & Doa**: 
 - **Doa Pilihan**: رَبِّ اشْرَحْ لِي صَدْرِي وَيَسِّرْ لِي أَمْرِي (Robbis rohlii shodrii wa yassirlii amrii — Ya Allah, lapangkanlah dadaku dan mudahkanlah urusanku).
 - **Ikhtiar Kecil**: Ambil air wudu, minum segelas air hangat, lalu tumpahkan semua uneg-unegmu dalam sujud terakhir kepada-Nya. Allah Maha Mendengar.`;
+
+export async function POST(request: Request) {
+  try {
+    const { text } = await request.json();
+
+    if (!text || typeof text !== "string") {
+      return NextResponse.json(
+        { reply: "Ceritakan dulu apa yang kamu rasakan ya..." },
+        { status: 400 },
+      );
+    }
+
+    // Key hanya di server, JANGAN pakai NEXT_PUBLIC_
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY belum diset di .env.local!");
+    }
+
+    const geminiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey,
+        },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: `Seseorang sedang curhat kepadamu: "${text}"` }],
+            },
+          ],
+          generationConfig: { temperature: 0.8, maxOutputTokens: 2048 },
+        }),
+      },
+    );
+
+    const data = await geminiRes.json();
+
+    if (!geminiRes.ok) {
+      console.error("ERROR DARI GEMINI:", geminiRes.status, data?.error);
+      throw new Error(data?.error?.message || `HTTP ${geminiRes.status}`);
+    }
+
+    // Gabungkan semua part teks (model baru bisa mengembalikan >1 part)
+    const replyText = data.candidates?.[0]?.content?.parts
+      ?.map((p: { text?: string }) => p.text ?? "")
+      .join("")
+      .trim();
+
+    if (!replyText) {
+      console.error("Respon Gemini kosong:", JSON.stringify(data));
+      throw new Error("Respon Gemini kosong atau diblokir.");
     }
 
     return NextResponse.json({ reply: replyText });
-  } catch (error) {
-    console.error("API Route Error:", error);
-    return NextResponse.json({
-      reply: `1. **Pelukan & Empati**: Tarik napas sebentar ya... Apapun beban yang sedang kamu ceritakan, Allah tidak pernah tidur dan selalu memeluk hatimu.\n\n2. **Doa Penenang**: Cukup baca: *Hasbiallahu wa ni'mal wakil* (Cukuplah Allah menjadi tempat diri bagi kami, sebaik-baiknya pelindung).`,
-    });
+  } catch (error: any) {
+    console.error("DETAIL ERROR API GEMINI:", error.message || error);
+    return NextResponse.json({ reply: FALLBACK_REPLY });
   }
 }
