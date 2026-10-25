@@ -5,7 +5,7 @@ export async function POST(request: Request) {
     const { text } = await request.json();
 
     const geminiApiKey =
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+      process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY;
     const groqApiKey =
       process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY;
 
@@ -21,9 +21,9 @@ Berikan respons yang mengalir natural dengan struktur yang merangkul hati:
 3. **Penawar dari Al-Qur'an & Sunnah**: Berikan 1 ayat Al-Qur'an atau hadis yang paling pas sebagai penyejuk batin beserta terjemahannya yang menyentuh.
 4. **Langkah Tindakan & Doa**: Berikan saran ikhtiar nyata yang ringan dan menenangkan, lalu tutup dengan doa pendek penenang hati (lengkap dengan teks Arab, latin, dan artinya).`;
 
-    // 1. Coba Jalur Gemini
+    // 1. Coba Jalur Gemini (Menggunakan Model Stabil: gemini-1.5-flash)
     if (geminiApiKey && !replyText) {
-      const geminiModels = ["gemini-3.8-flash", "gemini-1.5-flash"];
+      const geminiModels = ["gemini-1.5-flash", "gemini-1.5-pro"];
       for (const model of geminiModels) {
         try {
           const res = await fetch(
@@ -42,14 +42,14 @@ Berikan respons yang mengalir natural dengan struktur yang merangkul hati:
             break;
           }
         } catch (e) {
-          // Lanjut ke model/jalur berikutnya
+          console.error(`Gemini model ${model} error:`, e);
         }
       }
     }
 
-    // 2. Coba Jalur Groq jika Gemini belum dapat
+    // 2. Coba Jalur Groq jika Gemini belum dapat / tidak ada key
     if (groqApiKey && !replyText) {
-      const groqModels = ["llama-3.1-8b-instant", "llama-3.3-70b-versatile"];
+      const groqModels = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
       for (const model of groqModels) {
         try {
           const res = await fetch(
@@ -73,13 +73,12 @@ Berikan respons yang mengalir natural dengan struktur yang merangkul hati:
             break;
           }
         } catch (e) {
-          // Lanjut ke model berikutnya
+          console.error(`Groq model ${model} error:`, e);
         }
       }
     }
 
-    // 3. JARING PENGAMAN: Jika AI eksternal sedang gangguan/high demand,
-    // berikan respons natural darurat secara instan agar user tidak melihat error.
+    // 3. JARING PENGAMAN DARURAT
     if (!replyText) {
       replyText = `1. **Pelukan & Empati**: Peluk jauh buat kamu ya... Mendengar cerita "${text}", wajar banget kalau sekarang rasanya penat dan berat banget di dada. Tarik napas dalam-dalam, izinkan dirimu istirahat sebentar. Kamu udah hebat banget karena bertahan sejauh ini.
 
@@ -92,7 +91,7 @@ Ingatlah selalu kepada **Al-Wadud** (Maha Pencinta & Mengasihi) dan **As-Salam**
 
 4. **Langkah Tindakan & Doa**: 
 - **Doa Pilihan**: رَبِّ اشْرَحْ لِي صَدْرِي وَيَسِّرْ لِي أَمْرِي (Robbis rohlii shodrii wa yassirlii amrii — Ya Allah, lapangkanlah dadaku dan mudahkanlah urusanku).
-- **Ikhtiar Kecil**: Ambil air wudu, minum segelas air hangat, laluumpahkan semua uneg-unegmu dalam sujud terakhir kepada-Nya. Allah Maha Mendengar.`;
+- **Ikhtiar Kecil**: Ambil air wudu, minum segelas air hangat, lalu tumpahkan semua uneg-unegmu dalam sujud terakhir kepada-Nya. Allah Maha Mendengar.`;
     }
 
     return NextResponse.json({ reply: replyText });
