@@ -268,8 +268,7 @@ export const CurhatSection: React.FC<CurhatSectionProps> = ({ isDarkMode }) => {
                   >
                     <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                     Curhatanmu tidak ditampilkan ke publik dan tidak disimpan di
-                    website ini. Teks dikirim ke layanan AI (Google Gemini)
-                    untuk diproses.
+                    website ini.
                   </p>
 
                   <button
